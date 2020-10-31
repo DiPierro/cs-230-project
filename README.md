@@ -11,4 +11,4 @@ The document `55word_doc_text-10.28.8.log` contains the output log from an initi
 
 The document `55word_doc_text-em100-best.topic.vec` reports the topic embedding produced by the model.
 
-
+The final file in this repository is a Google Colab Notebook showing preprocessing steps as well as a basic implementation of Latent Dirichlet Allocation using the library Gensim. 
