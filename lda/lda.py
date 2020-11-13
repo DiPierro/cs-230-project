@@ -13,6 +13,8 @@ import sys
 import logging
 
 # Gensim functions for topic modeling
+from gensim.models import Phrases
+# from gensim.models.word2vec import LineSentence
 from gensim.corpora import Dictionary
 from gensim.models.ldamulticore import LdaMulticore
 from gensim.models.coherencemodel import CoherenceModel
@@ -38,6 +40,9 @@ parser.add_argument('--dev_path', default='data/processed/dev/dev_200.csv',
 
 def process_data(path, params, dictionary=None):
     """Prepare data for LDA model and filter out most uncommon/common words"""
+    # Define place names as stopwords
+    stop_words = ["alameda", "burlingame", "cupertino", "hayward", "hercules", "mountain", "view", "mtc", "oakland", "san", "francisco", "jose", "leandro", "mateo", "santa", "clara", "stockton", "sunnyvale"]
+    
     # Read in the data
     logging.info("Reading in the data...")
     data = path
@@ -58,12 +63,19 @@ def process_data(path, params, dictionary=None):
                 title = '{}-{}'.format(row[0], counter)
                 for token in text:
                     token = token.strip()
-                    if token != ' ':
+                    if token != ' ' and token not in stop_words:
                         tokens.append(token)
                 docs.append(tokens)
                 titles.append(title)
     logging.info("Done reading in the data.")
     
+    # Add bigrams
+    bigram = Phrases(docs, min_count = 30)
+    for i in range(len(docs)):
+        for token in bigram[docs[i]]:
+            if '_' in token:
+                docs[i].append(token)
+
     if dictionary is None:
         # Create a dictionary representation of the documents
         # if there is not already one
@@ -244,10 +256,10 @@ if __name__ == "__main__":
     params = Params(json_path)
 
     # Perform hypersearch over one parameter at a time
-    num_topics_list = geomspace(start=10, stop=30, num=15, dtype='int16')
+    num_topics_list = [100, 150, 200, 250, 300, 400, 500]
     chunksizes = [1152, 1216, 1280, 1344, 1408]
-    passes = geomspace(start=30, stop=50, num=15, dtype='int16') # Number of epochs
-    no_above_list = geomspace(start=0.4, stop=1, num=15)# Filter out words that occur in more than X/total documents
+    passes = geomspace(start=10, stop=100, num=15, dtype='int16') # Number of epochs
+    no_above_list = geomspace(start=0.3, stop=0.5, num=5)# Filter out words that occur in more than X/total documents
     no_below_list = [1, 5, 10, 15, 20, 25] # Filter out words that occur in less than X documents
     decay = geomspace(start=0.5, stop=1, num=10)
     
