@@ -256,10 +256,10 @@ if __name__ == "__main__":
     params = Params(json_path)
 
     # Perform hypersearch over one parameter at a time
-    num_topics_list = [100, 150, 200, 250, 300, 400, 500]
-    chunksizes = [1152, 1216, 1280, 1344, 1408]
-    passes = geomspace(start=10, stop=100, num=15, dtype='int16') # Number of epochs
-    no_above_list = geomspace(start=0.3, stop=0.5, num=5)# Filter out words that occur in more than X/total documents
+    num_topics_list = [200]
+    chunksizes = [1088, 1024, 960, 896, 832]
+    passes = geomspace(start=10, stop=100, num=10, dtype='int16') # Number of epochs
+    no_above_list = geomspace(start=0.1, stop=0.5, num=10)# Filter out words that occur in more than X/total documents
     no_below_list = [1, 5, 10, 15, 20, 25] # Filter out words that occur in less than X documents
     decay = geomspace(start=0.5, stop=1, num=10)
     
