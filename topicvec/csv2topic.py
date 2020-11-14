@@ -20,6 +20,8 @@ from utils import *
 from gensim.corpora import Dictionary
 from gensim.models.coherencemodel import CoherenceModel
 import gensim.downloader
+from gensim.models import Phrases
+
 from numpy import geomspace
 
 def main():
@@ -40,7 +42,7 @@ def get_base_config():
         short_name = None,
         unigramFilename = "data/raw/top1grams-wiki.txt",
         word_vec_file = "data/raw/25000-180000-500-BLK-8.0.vec",
-        K = 18,
+        K = 100,
         N0 = 500,
         max_l = 5,
         init_l = 1,
@@ -93,19 +95,19 @@ def read_data(config):
                 token = token.strip()
                 if token != ' ':
                     tokens.append(token)
-            
+            # topicvecDir.py needs this nested list format
+            # in order to run correctly.
             tokens = [tokens]
             file_rownames.append(data + str(row_num))
             docwords.append(tokens)
             row_num += 1
     
     # Add bigrams
-    for outer_list in enumerate(docwords):
+    for outer_list in docwords:
         bigram = Phrases(outer_list)
         for i in range(len(outer_list)):
             for token in bigram[outer_list[i]]:
                 if '_' in token:
-                    pdb.set_trace()
                     outer_list[i].append(token)
     
     return docwords, file_rownames
@@ -114,10 +116,10 @@ def run_experiments(config, docwords, file_rownames, glove_vectors):
     """Configures experiments and runs them in a loop."""
     # Edit this input dictionary to change the experiments to run.
     input_dict = OrderedDict([
-        ('num_topics', [18]),
-        ('alpha0', geomspace(start=0.05, stop=0.15, num=15)),
-        ('alpha1', geomspace(start=0.05, stop=0.15, num=15)),
-        ('delta', geomspace(start=0.05, stop=0.15, num=15))
+        # ('num_topics', [200]),
+        ('alpha0', geomspace(start=0.05, stop=0.15, num=10)),
+        ('alpha1', geomspace(start=0.05, stop=0.15, num=10)),
+        ('delta', geomspace(start=0.05, stop=0.15, num=10))
     ]) 
     
     for param in input_dict:
@@ -142,7 +144,7 @@ def run_experiments(config, docwords, file_rownames, glove_vectors):
 def run_topicvec(config, docwords, file_rownames):
     """Runs the TopicVec pipeline. Adapted from the original open source code."""
     topicvec = topicvecDir(**config)
-    pdb.set_trace()
+    # pdb.set_trace()
     topicvec.setDocs( docwords, file_rownames )    
     best_last_Ts, Em, docs_Em, Pi = topicvec.inference()
 
