@@ -1,3 +1,10 @@
+"""
+topicvecDir.py
+
+The following code is excerpted with slight adaptations from "Generative Topic Embedding: a Continuous 
+Representation of Documents" (ACL 2016) by Shaohua Li, Tat-Seng Chua, Jun Zhu 
+and Chunyan Miao. The full implementation of TopicVec here: https://github.com/askerlee/topicvec
+"""
 import numpy as np
 import scipy.linalg
 # import for using gammaln, psi
