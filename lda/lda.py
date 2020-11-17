@@ -1,5 +1,5 @@
 """lda.py"""
-# Helper functions
+# Utility functions
 import csv
 import pdb
 from collections import OrderedDict
@@ -23,7 +23,7 @@ import gensim.downloader
 # Utility functions provided in CS230 project template
 from model.utils import Params, set_logger
 
-# Global settings
+# Global settings - necessary because csv is so large
 csv.field_size_limit(sys.maxsize)
 PYTHON = sys.executable
 
@@ -32,11 +32,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--parent_dir', default='experiments/num_topics',
                     help="Directory containing params.json")
 parser.add_argument('--train_path', default='data/processed/train/train_200.csv',
-                    help="File containing test data")
+                    help="File containing train data")
 parser.add_argument('--hyperparameter', default='num_topics',
                     help="Hyperparameter to tune")
 parser.add_argument('--dev_path', default='data/processed/dev/dev_200.csv',
                     help="File containing dev data")
+parser.add_argument('--test_mode', default=False,
+                    help="Run script in test mode")
 
 def process_data(path, params, dictionary=None):
     """Prepare data for LDA model and filter out most uncommon/common words"""
@@ -101,10 +103,8 @@ def train_lda(corpus, params, dictionary):
     chunksize = params.chunksize
     passes = params.passes
     iterations = params.iterations
-    # This evaluates perplexity. We're concerned 
-    # with coherence, so we leave this as None.
-    eval_every = None
-    decay = params.decay  
+    decay = params.decay
+    offset = params.offset  
 
     # Make an index to word dictionary.
     logging.info("Mapping ids to words...")
@@ -116,22 +116,23 @@ def train_lda(corpus, params, dictionary):
     lda = LdaMulticore(
         corpus=corpus,
         id2word=id2word,
-        workers=3,
+        workers=3, # Allows algorithm to run more efficiently
         chunksize=chunksize,
         alpha='asymmetric', # If low: Each document is represented by only a few topics
         eta='auto', # If low: Each topic is only represented by a few words
         decay=decay,
+        offset=offset,
         iterations=iterations,
         num_topics=num_topics,
         passes=passes,
-        eval_every=eval_every,
+        eval_every=None,
         random_state=230,
         per_word_topics=True
     )
     logging.info("Done making the LDA model.")
     return lda
 
-def log_results(lda, params, corpus, dictionary, train_flag):
+def log_results(lda, params, corpus, dictionary, train_flag, args):
     """Print topics, calculate coherence and export results to csv."""
     if train_flag:
         logging.info("Logging training results...")
@@ -170,14 +171,18 @@ def log_results(lda, params, corpus, dictionary, train_flag):
             ('passes', params.passes),
             ('no_above_list', params.no_above),
             ('no_below_list', params.no_below),
-            ('decay', params.decay)
+            ('decay', params.decay),
+            ('offset', params.offset)
         ])
 
     # Check if csv exists
     if train_flag:
         csv_path = os.path.join(args.parent_dir, 'train_results_200.csv')
-    else:
+    elif not train_flag and not args.test_mode:
         csv_path = os.path.join(args.parent_dir, 'dev_results_200.csv')
+    elif not train_flag and args.test_mode:
+        csv_path = os.path.join(args.parent_dir, 'test_results.csv')
+    
     new_file = not os.path.exists(csv_path)
 
     # Write out our results
@@ -191,23 +196,24 @@ def log_results(lda, params, corpus, dictionary, train_flag):
     # Save the model
     if train_flag:
         logging.info("Saving model...")
-        model_name = 'num_topics_{}_chunksize_{}_passes_{}_no_above_{}_no_below_{}_decay_{}.jl'.format(
+        model_name = 'num_topics_{}_chunksize_{}_passes_{}_no_above_{}_no_below_{}_decay_{}_offset_{}.jl'.format(
             params.num_topics,
             params.chunksize,
             params.passes,
             params.no_above,
             params.no_below,
-            params.decay
+            params.decay,
+            params.offset
             )
         joblib.dump(lda, os.path.join(args.parent_dir, model_name))
         logging.info("Model saved.")
 
 def eval_results(dev_path, lda, dictionary, params):
     """Calculate coherence on unseen documents and print topics for unseen documents."""
-    logging.info("Evaluating results on dev set...")
+    logging.info("Evaluating results...")
     corpus, _, titles = process_data(path=dev_path, params=params, dictionary=dictionary)
-    # Get the topic probability distribution for each document in dev
-    log_results(lda, params, corpus, dictionary, False)
+    # Get the topic proportions for each document in dev
+    log_results(lda, params, corpus, dictionary, False, args)
     
     # Get main topic in each new document
     # Adapted from https://www.machinelearningplus.com/nlp/topic-modeling-visualization-how-to-present-results-lda-models/
@@ -223,7 +229,7 @@ def eval_results(dev_path, lda, dictionary, params):
                 words = lda.show_topic(topicid=topic_num, topn=30)
                 topic_keywords = ", ".join([word for word, prop in words])
                 logging.info("Topic number: " + str(topic_num))
-                logging.info("Topic probability: " + str(round(prop_topic,4)))
+                logging.info("Topic proportion: " + str(round(prop_topic,4)))
                 logging.info("Topic keywords: " + str(topic_keywords))
                 
     logging.info("Finished evaluating results on dev set.")
@@ -241,10 +247,14 @@ def run_search(search_param, args, params):
     lda = train_lda(corpus, params, dictionary)
 
     # Save results
-    log_results(lda, params, corpus, dictionary, True)
+    log_results(lda, params, corpus, dictionary, True, args)
 
-    # Evaluate the model on dev set
-    eval_results(dev_path=args.dev_path, lda=lda, dictionary=dictionary, params=params)
+    if not args.test_mode:
+        # Evaluate the model on dev set
+        eval_results(dev_path=args.dev_path, lda=lda, dictionary=dictionary, params=params)
+    else:
+        # Evaluate model in the test set
+        eval_results(dev_path='data/processed/test/test_200.csv', lda=lda, dictionary=dictionary, params=params)
 
 if __name__ == "__main__":
     random.seed(230)
@@ -255,13 +265,15 @@ if __name__ == "__main__":
     assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
     params = Params(json_path)
 
-    # Perform hypersearch over one parameter at a time
-    num_topics_list = [200]
-    chunksizes = [1088, 1024, 960, 896, 832]
-    passes = geomspace(start=10, stop=100, num=10, dtype='int16') # Number of epochs
-    no_above_list = geomspace(start=0.1, stop=0.5, num=10)# Filter out words that occur in more than X/total documents
+    # Perform search over one parameter at a time
+    # Edit these lists to see results for different values
+    num_topics_list = [100] # Number of topics
+    chunksizes = [256, 1024, 4096, 16384] # How many documents to process at a time
+    passes = geomspace(start=1, stop=500, num=10, dtype='int16') # Number of epochs
+    no_above_list = geomspace(start=0.5, stop=1, num=10)# Filter out words that occur in more than X/total documents
     no_below_list = [1, 5, 10, 15, 20, 25] # Filter out words that occur in less than X documents
-    decay = geomspace(start=0.5, stop=1, num=10)
+    decay = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    offset = [384, 512, 640, 768, 896]
     
     if args.hyperparameter == 'num_topics':
         search_params = num_topics_list
@@ -304,29 +316,10 @@ if __name__ == "__main__":
             # Modify the relevant parameter in params
             params.decay = search_param 
             run_search(search_param, args, params)
-
-# https://radimrehurek.com/gensim/auto_examples/core/run_similarity_queries.html
-# corpus = [dictionary.doc2bow(text) for text in texts]
-# doc = "Human computer interaction"
-# vec_bow = dictionary.doc2bow(doc.lower().split())
-# vec_lsi = lsi[vec_bow]  # convert the query to LSI space
-# print(vec_lsi)
-# from gensim import similarities
-# index = similarities.MatrixSimilarity(lsi[corpus])
-# sims = index[vec_lsi]  # perform a similarity query against the corpus
-# print(list(enumerate(sims)))  # print (document_number, document_similarity) 2-tuples
-#     sims = sorted(enumerate(sims), key=lambda item: -item[1])
-# for doc_position, doc_score in sims:
-#     print(doc_score, documents[doc_position])
-# potential viz: https://stackoverflow.com/questions/42995073/displaying-topics-associated-with-a-document-query-in-gensim
-
-# >>>
-# >>> # Load a potentially pretrained model from disk.
-# >>> lda = LdaModel.load(temp_file)
-# # then reload it with
-#    lda_model = joblib.load('lda_model.jl')
-
-# DOCS
-# https://radimrehurek.com/gensim/models/ldamodel.html
-# https://radimrehurek.com/gensim/models/ldamodel.html
-# Useful viz inspiration: https://www.machinelearningplus.com/nlp/topic-modeling-python-sklearn-examples/#10diagnosemodelperformancewithperplexityandloglikelihood
+    
+    elif args.hyperparameter == 'offset':
+        search_params = offset
+        for search_param in search_params:
+            # Modify the relevant parameter in params
+            params.offset = search_param 
+            run_search(search_param, args, params)

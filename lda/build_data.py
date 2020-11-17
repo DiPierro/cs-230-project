@@ -1,15 +1,14 @@
 """build_data.py"""
 # Libraries------------------
 
-# import pydiff
 import difflib
 import os
-# import pandas as pd
 from pprint import pprint
 import pdb
 import re
 from collections import Counter
 import spacy
+import en_core_web_sm
 import csv
 from operator import itemgetter 
 import random
@@ -18,9 +17,6 @@ import random
 
 def preprocess(file_list, places):
     """Processes all of the documents."""
-    # TODO: Add bigrams, phrases, etc from Gensim
-    # TODO: threshhold with Gensim
-    # See: https://radimrehurek.com/gensim/auto_examples/tutorials/run_lda.html#sphx-glr-auto-examples-tutorials-run-lda-py
     print("Preprocessing documents...")
     new_list = []
     
@@ -30,6 +26,8 @@ def preprocess(file_list, places):
         baseline_checked = False
         counter = 0
         for doc in file_list:
+            # Check if we have 'diffed' against a baseline document
+            # This is to remove 'boilerplate' text where we can
             if doc['place'] == place and not baseline_flag:
                 baseline = doc
                 baseline_flag = True
@@ -39,12 +37,11 @@ def preprocess(file_list, places):
                     baseline['processed_text'] = process_text(text = diff_doc(baseline=doc['raw_text'], new_doc=baseline['raw_text']))
                     assert 'doc_id' in baseline.keys()
                     new_list.append(baseline)
-                    print("Added ", baseline['doc_id'])
                     baseline_checked = True
                 doc['processed_text'] = process_text(text = diff_doc(baseline=baseline['raw_text'], new_doc=doc['raw_text']))
                 assert 'doc_id' in doc.keys()
                 new_list.append(doc)
-                # print("Added ", doc['doc_id'])
+        
         # Add any document that can't be diffed
         if counter == 0:
             baseline['processed_text'] = process_text(text = ''.join(baseline['raw_text']))
@@ -60,7 +57,7 @@ def read_files(directory):
     print("Reading files...")
     file_list = []
     places = []
-    files = os.listdir(DIR)[50:]
+    files = os.listdir(DIR)
     
     for index, item in enumerate(files):
         
@@ -127,8 +124,8 @@ def process_text(text):
         'civil', 'remotely', 'consider', 'library', 'budget', 'commissions'
     }
     default_stops |= ents
-    # TODO: Make this a portable path
-    default_stops |= add_stop_words('/Users/amydipierro/GitHub/cs230/nlp/data/processed/top_words.csv')
+    
+    default_stops |= add_stop_words('data/processed/top_words.csv')
     
     lower = [word.lower() for word in pos_filter]
     no_stops = [word for word in lower if word not in default_stops]
@@ -147,7 +144,10 @@ def add_stop_words(word_file):
     return top_words_set
 
 def get_top_words(file_list):
-    """Counts the most common words in our corpus."""
+    """
+    Counts the most common words in our corpus. This function was used to generate top_words.csv.
+    It is not currently invoked in main() since top_words.csv is provided.
+    """
     word_dict = {}
     print("Getting top words...")
     for doc in file_list:
@@ -159,8 +159,7 @@ def get_top_words(file_list):
     top_200 = dict(sorted(word_dict.items(), key = itemgetter(1), reverse = True)[:200])
     print("Finished getting top words.")
 
-    # TODO: Make this a portable path
-    with open('/Users/amydipierro/GitHub/cs230/nlp/data/processed/top_words.csv', 'w') as csv_file:  
+    with open('data/processed/top_words.csv', 'w') as csv_file:  
         writer = csv.writer(csv_file)
         for key, value in top_200.items():
             writer.writerow([key])
@@ -183,7 +182,7 @@ def chunk(processed_files, num_words):
                 new_dict['doc_text'] = full_text[i:i + num_words]
                 assert ('doc_id' and 'doc_text') in new_dict.keys()
                 new_list.append(new_dict)
-            # If there will be 50 or fewer words left in the doc
+            # If there will be very few words left in the doc
             # then combine the next chunk with the current chunk
             else:
                 new_dict = {}
@@ -213,9 +212,8 @@ def split(final_files):
 
 def write(data, name):
     """Helper method to write train/dev/test sets to csv files."""
-    # TODO: Make this a portable path
     print("Writing ", name, "data...")
-    file_name = '/Users/amydipierro/GitHub/cs230/nlp/data/processed/' + name + '/' + name + '_200.csv'
+    file_name = 'data/processed/' + name + '/' + name + '_200.csv'
     headers = data[0].keys()
     with open(file_name, 'w') as csv_file:
         dict_writer = csv.DictWriter(csv_file, headers, delimiter='\t')
@@ -223,12 +221,9 @@ def write(data, name):
         dict_writer.writerows(data)
 
 if __name__ == '__main__':
-    # TODO: Turn into a CLI
-    # TODO: Make this a portable path
-    # TODO: Add logging (esp. for length of data)
     
-    DIR = "/Users/amydipierro/GitHub/cs230/nlp/data/raw/content/docs"
-    nlp = spacy.load('en_core_web_sm') # TODO: Identify this as a requirement
+    DIR = "data/raw/content/docs"
+    nlp = spacy.load('en_core_web_sm') 
     places, file_list = read_files(directory=DIR)
     processed_files = preprocess(file_list, places)
     assert len(file_list) == len(processed_files)
@@ -237,8 +232,5 @@ if __name__ == '__main__':
     write(train, "train")
     write(dev, "dev")
     write(test, "test")
-    
-    # TODO: move this to its own script
-    # get_top_words(processed_files)
     
 

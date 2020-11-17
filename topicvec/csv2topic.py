@@ -28,6 +28,7 @@ def main():
     config = get_base_config()
     glove_vectors = load_glove_embeddings()
     docwords, file_rownames = read_data(config)
+    # Set test = True to run in test mode.
     run_experiments(config, docwords, file_rownames, glove_vectors)
 
 def get_base_config():
@@ -35,8 +36,8 @@ def get_base_config():
     custom_stopwords = \
         "alameda burlingame cupertino hayward hercules mountain view mtc oakland jose leandro mateo santa clara stockton sunnyvale city council agenda minutes committee commission milpitas meeting authorities city exhibit report attachment recommendation district ordinance code supervisors councilmember supervisor manager seconding authorizing approving"
         
+    # Edit this dict with desired hyperparameters to run in test mode
     config = dict(
-        # csv_filenames = ["55word_doc_text_short.csv"],
         csv_filenames = ["/Users/amydipierro/GitHub/cs230/nlp/data/processed/train/train_200.csv"], 
         csv_results = 'experiments/num_topics/train.csv',
         short_name = None,
@@ -57,7 +58,7 @@ def get_base_config():
         iniDelta = 0.1,
         MAX_EM_ITERS = 100,
         topicDiff_tolerance = 2e-3,
-        printTopics_iterNum = 10,
+        printTopics_iterNum = 1,
         zero_topic0 = True,
         useDrdtApprox = False,
         customStopwords = custom_stopwords,
@@ -69,7 +70,8 @@ def get_base_config():
         evalKmeans = False,
         verbose = 1,
         seed = 0,
-        logfilename = None
+        logfilename = None,
+        test = False # Change to true to run in test mode
     )
     return config
 
@@ -115,43 +117,51 @@ def read_data(config):
 def run_experiments(config, docwords, file_rownames, glove_vectors):
     """Configures experiments and runs them in a loop."""
     # Edit this input dictionary to change the experiments to run.
-    input_dict = OrderedDict([
-        # ('num_topics', [200]),
-        ('alpha0', geomspace(start=0.05, stop=0.15, num=10)),
-        ('alpha1', geomspace(start=0.05, stop=0.15, num=10)),
-        ('delta', geomspace(start=0.05, stop=0.15, num=10))
-    ]) 
-    
-    for param in input_dict:
-        for i, val in enumerate(input_dict[param]):
-            path = 'experiments/{}/train.csv'.format(param)
-            config['csv_results'] = os.path.join(os.getcwd(), path)
-            config['short_name'] = param
-            config['logfilename'] = '{}_{}'.format(param, val)
-            # if param == 'num_topics':
-            #     config['K'] = val
-            if param == 'alpha0':
-                config['alpha0'] = val
-            elif param == 'alpha1':
-                config['alpha1'] = val
-            elif param == 'delta':
-                config['iniDelta'] = val
-            topicvec = run_topicvec(config, docwords, file_rownames)
-            results_dict = get_coherence(config, topicvec, docwords, glove_vectors)
-            write_results(config, results_dict)
-            eval_results(config, glove_vectors, param)
-            
+    if not config['test']:
+        input_dict = OrderedDict([
+            ('num_topics', [100]),
+            ('alpha0', geomspace(start=0.05, stop=0.15, num=10)),
+            ('alpha1', geomspace(start=0.05, stop=0.15, num=10)),
+            ('delta', geomspace(start=0.05, stop=0.15, num=10))
+        ]) 
+        
+        for param in input_dict:
+            for i, val in enumerate(input_dict[param]):
+                path = 'experiments/{}/train.csv'.format(param)
+                config['csv_results'] = os.path.join(os.getcwd(), path)
+                config['short_name'] = param
+                config['logfilename'] = '{}_{}'.format(param, val)
+                if param == 'num_topics':
+                    config['K'] = val
+                elif param == 'alpha0':
+                    config['alpha0'] = val
+                elif param == 'alpha1':
+                    config['alpha1'] = val
+                elif param == 'delta':
+                    config['iniDelta'] = val
+                topicvec = run_topicvec(config, docwords, file_rownames)
+                results_dict = get_coherence(config, topicvec, docwords, glove_vectors)
+                write_results(config, results_dict)
+                eval_results(config, glove_vectors, param)
+    else:
+        path = 'experiments/num_topics/train.csv'
+        config['csv_results'] = os.path.join(os.getcwd(), path)
+        config['short_name'] = 'test'
+        config['logfilename'] = 'test'
+        topicvec = run_topicvec(config, docwords, file_rownames)
+        results_dict = get_coherence(config, topicvec, docwords, glove_vectors)
+        write_results(config, results_dict)
+        eval_results(config, glove_vectors, param)
+
 def run_topicvec(config, docwords, file_rownames):
     """Runs the TopicVec pipeline. Adapted from the original open source code."""
     topicvec = topicvecDir(**config)
-    # pdb.set_trace()
     topicvec.setDocs( docwords, file_rownames )    
     best_last_Ts, Em, docs_Em, Pi = topicvec.inference()
 
     basename = os.path.basename(config['logfilename'])
     basetrunk = os.path.splitext(basename)[0]
 
-    # int, numpy.ndarray, numpy.float64  
     best_it, best_T, best_loglike = best_last_Ts[0]
     save_matrix_as_text( basetrunk + "-em%d-best.topic.vec" %best_it, "topic", best_T  )
 
@@ -162,7 +172,7 @@ def run_topicvec(config, docwords, file_rownames):
     return topicvec
 
 def get_coherence(config, topicvec, docwords, glove_vectors):
-    """Calculate UMass and w2v coherence scores."""
+    """Calculate UMass and w2v (GloVe) coherence scores."""
 
     # Clean docwords
     docs = []
@@ -229,13 +239,17 @@ def write_results(config, results_dict):
 
 def eval_results(config, glove_vectors, param):
     """Evaluate the results on the dev set."""
-    config['csv_filenames'] = ["data/processed/dev/dev_200.csv"]
-    config['csv_results'] = config['csv_results'].replace('train', 'dev')
+    if not config['test']:
+        config['csv_filenames'] = ["data/processed/dev/dev_200.csv"]
+        config['csv_results'] = config['csv_results'].replace('train', 'dev')
+    else:
+        config['csv_filenames'] = ["data/processed/test/test_200.csv"]
+        config['csv_results'] = config['csv_results'].replace('train', 'test')
     docwords, file_rownames = read_data(config)
     topicvec = run_topicvec(config, docwords, file_rownames)
     results_dict = get_coherence(config, topicvec, docwords, glove_vectors)
     write_results(config, results_dict)
-
+    
 if __name__ == '__main__':
     main()
   

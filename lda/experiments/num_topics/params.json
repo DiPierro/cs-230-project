@@ -1,0 +1,10 @@
+{
+    "num_topics": 100,
+    "chunksize": 1024,
+    "passes": 500,
+    "iterations": 1000,
+    "no_above": 0.5,
+    "no_below": 1,
+    "decay": 0.5,
+    "offset": 384
+}

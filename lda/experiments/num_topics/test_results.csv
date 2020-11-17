@@ -1,0 +1,2 @@
+avg_umass_coherence,umass_coherence,glove_coherence,num_topics,chunksize,passes,no_above_list,no_below_list,decay,offset
+-6.164687459878617,-6.164687459878614,0.5941189,100,1024,500,0.143,25,0.5,384
