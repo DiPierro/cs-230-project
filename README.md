@@ -23,10 +23,11 @@ The directory `\topicvec` contains scripts and associated outputs excerpted and 
 ## Usage
 
 Clone repository, then type:
-
-`cd cs-230-project`
-`pipenv install`
-`pipenv shell`
+```
+cd cs-230-project
+pipenv install
+pipenv shell
+```
 
 ## Requirements
 
